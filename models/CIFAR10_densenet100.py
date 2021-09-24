@@ -10,7 +10,7 @@ import os
 
 def CIFAR10_densenet100(use_softmax=True, rel_path='./'):
     nb_classes = 10
-    depth = 100
+    depth = 121
     nb_dense_block = 3
     growth_rate = 12
     nb_filter = 16
