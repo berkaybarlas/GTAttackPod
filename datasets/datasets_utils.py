@@ -3,7 +3,7 @@
 from functools import reduce
 from utils.math import reduce_precision_py
 import numpy as np
-
+import time
 
 def get_data_subset_with_systematic_attack_labels(dataset, model, balanced, num_examples):
     assert balanced and dataset.num_classes <= num_examples, '# of examples should be at least the # of classes'
@@ -11,7 +11,11 @@ def get_data_subset_with_systematic_attack_labels(dataset, model, balanced, num_
     X_test_all, Y_test_all = dataset.get_test_dataset()
 
     print("Evaluating the target model...")
+    time_start = time.time()
     Y_pred_all = model.predict(X_test_all)
+    dur_per_sample = (time.time() - time_start) / len(X_test_all)
+    print("\nStatistics of Dataset (%f seconds per sample)" % dur_per_sample)
+
     mean_conf_all = calculate_mean_confidence(Y_pred_all, Y_test_all)
     accuracy_all = calculate_accuracy(Y_pred_all, Y_test_all)
     print('Test accuracy on benign examples %.2f%%' % (accuracy_all * 100))
