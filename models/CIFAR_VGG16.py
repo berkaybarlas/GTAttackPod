@@ -26,7 +26,7 @@ TF_WEIGHTS_PATH_NO_TOP = 'https://github.com/fchollet/deep-learning-models/relea
 
 
 
-def CIFAR_VGG16():
+def CIFAR_VGG16(rel_path='./'):
     nb_classes = 10
       # Determine proper input shape
     inputs = Input(shape=(32, 32, 3))
@@ -34,9 +34,8 @@ def CIFAR_VGG16():
     x = __create_dense_net(nb_classes, inputs, use_softmax, depth, nb_dense_block,
                            growth_rate, nb_filter, -1, False, 0.0, None, 1E-4, False, activation)
 
-    # Create model.
+    # Create model
     model = VGG16(input_shape=(32, 32, 3), include_top=False , classes=nb_classes)
-    #model = Model(inputs, x, name='CIFAR10_densenet100')
     model.load_weights(os.path.join('%smodels/weights' % rel_path, "CIFAR10-vgg16_weights.h5"))
     model.compile(loss='categorical_crossentropy', optimizer='sgd', metrics=['acc'])
     return model
