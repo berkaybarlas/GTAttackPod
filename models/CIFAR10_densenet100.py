@@ -19,6 +19,9 @@ from keras.layers.pooling import AveragePooling2D, MaxPooling2D
 from keras.layers.pooling import GlobalAveragePooling2D
 from keras.layers import Input
 from keras.utils.layer_utils import convert_all_kernels_in_model, convert_dense_weights_data_format
+from keras.utils.data_utils import get_file
+from keras.engine.topology import get_source_inputs
+from keras_applications.imagenet_utils import _obtain_input_shape
 from keras.applications.imagenet_utils import decode_predictions
 import keras.backend as K
 
@@ -37,11 +40,132 @@ def CIFAR10_densenet100(use_softmax=True, rel_path='./'):
                            growth_rate, nb_filter, -1, False, 0.0, None, 1E-4, False, activation)
 
     # Create model.
-    model = Model(inputs, x, name='CIFAR10_densenet100')
-    model.load_weights(os.path.join('%smodels/weights' % rel_path, "DenseNet-BC-121-32-no-top.h5"))
-    model.compile(loss='categorical_crossentropy', optimizer='sgd', metrics=['acc'])
+    model = DenseNet(input_shape=(32, 32, 3), include_top=True , depth = 121, classes=nb_classes)
+    #model = Model(inputs, x, name='CIFAR10_densenet100')
+    #model.load_weights(os.path.join('%smodels/weights' % rel_path, "DenseNet-BC-121-32-no-top.h5"))
+    #model.compile(loss='categorical_crossentropy', optimizer='sgd', metrics=['acc'])
     return model
     
+def DenseNet(input_shape=None, depth=40, nb_dense_block=3, growth_rate=12, nb_filter=-1, nb_layers_per_block=-1,
+             bottleneck=False, reduction=0.0, dropout_rate=0.0, weight_decay=1e-4, subsample_initial_block=False,
+             include_top=True, weights=None, input_tensor=None,
+             classes=10, activation='softmax'):
+    '''Instantiate the DenseNet architecture,
+        optionally loading weights pre-trained
+        on CIFAR-10. Note that when using TensorFlow,
+        for best performance you should set
+        `image_data_format='channels_last'` in your Keras config
+        at ~/.keras/keras.json.
+        The model and the weights are compatible with both
+        TensorFlow and Theano. The dimension ordering
+        convention used by the model is the one
+        specified in your Keras config file.
+        # Arguments
+            input_shape: optional shape tuple, only to be specified
+                if `include_top` is False (otherwise the input shape
+                has to be `(32, 32, 3)` (with `channels_last` dim ordering)
+                or `(3, 32, 32)` (with `channels_first` dim ordering).
+                It should have exactly 3 inputs channels,
+                and width and height should be no smaller than 8.
+                E.g. `(200, 200, 3)` would be one valid value.
+            depth: number or layers in the DenseNet
+            nb_dense_block: number of dense blocks to add to end (generally = 3)
+            growth_rate: number of filters to add per dense block
+            nb_filter: initial number of filters. -1 indicates initial
+                number of filters is 2 * growth_rate
+            nb_layers_per_block: number of layers in each dense block.
+                Can be a -1, positive integer or a list.
+                If -1, calculates nb_layer_per_block from the network depth.
+                If positive integer, a set number of layers per dense block.
+                If list, nb_layer is used as provided. Note that list size must
+                be (nb_dense_block + 1)
+            bottleneck: flag to add bottleneck blocks in between dense blocks
+            reduction: reduction factor of transition blocks.
+                Note : reduction value is inverted to compute compression.
+            dropout_rate: dropout rate
+            weight_decay: weight decay rate
+            subsample_initial_block: Set to True to subsample the initial convolution and
+                add a MaxPool2D before the dense blocks are added.
+            include_top: whether to include the fully-connected
+                layer at the top of the network.
+            weights: one of `None` (random initialization) or
+                'imagenet' (pre-training on ImageNet)..
+            input_tensor: optional Keras tensor (i.e. output of `layers.Input()`)
+                to use as image input for the model.
+            classes: optional number of classes to classify images
+                into, only to be specified if `include_top` is True, and
+                if no `weights` argument is specified.
+            activation: Type of activation at the top layer. Can be one of 'softmax' or 'sigmoid'.
+                Note that if sigmoid is used, classes must be 1.
+        # Returns
+            A Keras model instance.
+        '''
+
+    if weights not in {'imagenet', None}:
+        raise ValueError('The `weights` argument should be either '
+                         '`None` (random initialization) or `cifar10` '
+                         '(pre-training on CIFAR-10).')
+
+    if weights == 'imagenet' and include_top and classes != 1000:
+        raise ValueError('If using `weights` as ImageNet with `include_top`'
+                         ' as true, `classes` should be 1000')
+
+    if activation not in ['softmax', 'sigmoid']:
+        raise ValueError('activation must be one of "softmax" or "sigmoid"')
+
+    if activation == 'sigmoid' and classes != 1:
+        raise ValueError('sigmoid activation can only be used when classes = 1')
+
+    # Determine proper input shape
+    input_shape = _obtain_input_shape(input_shape,
+                                      default_size=32,
+                                      min_size=8,
+                                      data_format=K.image_data_format(),
+                                      require_flatten=include_top)
+
+    if input_tensor is None:
+        img_input = Input(shape=input_shape)
+    else:
+        if not K.is_keras_tensor(input_tensor):
+            img_input = Input(tensor=input_tensor, shape=input_shape)
+        else:
+            img_input = input_tensor
+
+    x = __create_dense_net(classes, img_input, include_top, depth, nb_dense_block,
+                           growth_rate, nb_filter, nb_layers_per_block, bottleneck, reduction,
+                           dropout_rate, weight_decay, subsample_initial_block, activation)
+
+    # Ensure that the model takes into account
+    # any potential predecessors of `input_tensor`.
+    if input_tensor is not None:
+        inputs = get_source_inputs(input_tensor)
+    else:
+        inputs = img_input
+    # Create model.
+    model = Model(inputs, x, name='densenet')
+
+    # load weights
+    if weights == 'imagenet':
+        weights_loaded = False
+        model.load_weights(os.path.join('%smodels/weights' % rel_path, "DenseNet-BC-121-32-no-top.h5"))
+
+        if weights_loaded:
+            if K.backend() == 'theano':
+                convert_all_kernels_in_model(model)
+
+            if K.image_data_format() == 'channels_first' and K.backend() == 'tensorflow':
+                warnings.warn('You are using the TensorFlow backend, yet you '
+                              'are using the Theano '
+                              'image data format convention '
+                              '(`image_data_format="channels_first"`). '
+                              'For best performance, set '
+                              '`image_data_format="channels_last"` in '
+                              'your Keras config '
+                              'at ~/.keras/keras.json.')
+
+            print("Weights for the model were loaded successfully")
+
+    return model
 def __conv_block(ip, nb_filter, bottleneck=False, dropout_rate=None, weight_decay=1e-4):
     ''' Apply BatchNorm, Relu, 3x3 Conv2D, optional bottleneck block and dropout
     Args:
