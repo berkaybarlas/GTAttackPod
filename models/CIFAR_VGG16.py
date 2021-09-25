@@ -16,7 +16,9 @@ from keras.engine.topology import get_source_inputs
 from keras.utils.layer_utils import convert_all_kernels_in_model
 from keras.utils.data_utils import get_file
 from keras import backend as K
-from keras.applications.imagenet_utils import decode_predictions, preprocess_input, _obtain_input_shape
+from keras.applications.imagenet_utils import decode_predictions, preprocess_input
+from keras_applications.imagenet_utils import _obtain_input_shape
+import os
 
 
 TH_WEIGHTS_PATH = 'https://github.com/fchollet/deep-learning-models/releases/download/v0.1/vgg16_weights_th_dim_ordering_th_kernels.h5'
@@ -31,12 +33,9 @@ def CIFAR_VGG16(rel_path='./'):
       # Determine proper input shape
     inputs = Input(shape=(32, 32, 3))
 
-    x = __create_dense_net(nb_classes, inputs, use_softmax, depth, nb_dense_block,
-                           growth_rate, nb_filter, -1, False, 0.0, None, 1E-4, False, activation)
-
     # Create model
     model = VGG16(input_shape=(32, 32, 3), include_top=False , classes=nb_classes)
-    model.load_weights(os.path.join('%smodels/weights' % rel_path, "CIFAR10-vgg16_weights.h5"))
+    model.load_weights(os.path.join('%smodels/weights' % rel_path, "CIFAR10-vgg16_weights_1.h5"))
     model.compile(loss='categorical_crossentropy', optimizer='sgd', metrics=['acc'])
     return model
 
@@ -84,9 +83,9 @@ def VGG16(include_top=True, weights='imagenet',
     # Determine proper input shape
     input_shape = _obtain_input_shape(input_shape,
                                       default_size=224,
+                                      data_format=K.image_data_format(),
                                       min_size=32,  # Changed from original source to allow cifar10 data
-                                      dim_ordering=K.image_dim_ordering(),
-                                      include_top=include_top)
+                                      require_flatten=include_top)
 
     if input_tensor is None:
         img_input = Input(shape=input_shape)
@@ -108,16 +107,9 @@ def VGG16(include_top=True, weights='imagenet',
     # Block 3
     x = Convolution2D(256, 3, 3, activation='relu', border_mode='same', name='block3_conv1')(x)
     x = Convolution2D(256, 3, 3, activation='relu', border_mode='same', name='block3_conv2')(x)
-    x = Convolution2D(256, 3, 3, activation='relu', border_mode='same', name='block3_conv3')(x)
     x = MaxPooling2D((2, 2), strides=(2, 2), name='block3_pool')(x)
 
     # Block 4
-    x = Convolution2D(512, 3, 3, activation='relu', border_mode='same', name='block4_conv1')(x)
-    x = Convolution2D(512, 3, 3, activation='relu', border_mode='same', name='block4_conv2')(x)
-    x = Convolution2D(512, 3, 3, activation='relu', border_mode='same', name='block4_conv3')(x)
-    x = MaxPooling2D((2, 2), strides=(2, 2), name='block4_pool')(x)
-
-    # Block 5
     x = Convolution2D(512, 3, 3, activation='relu', border_mode='same', name='block5_conv1')(x)
     x = Convolution2D(512, 3, 3, activation='relu', border_mode='same', name='block5_conv2')(x)
     x = Convolution2D(512, 3, 3, activation='relu', border_mode='same', name='block5_conv3')(x)
